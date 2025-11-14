@@ -13,12 +13,15 @@ ParsedMetadata MetadataParser::parse(const juce::String& rawText)
     // Extract BPM
     metadata.bpm = extractBPM(rawText, metadata.bpmSource);
 
+    // Extract Key
+    metadata.key = extractKey(rawText, metadata.keySource);
+
     // Extract social handles
     metadata.instagramHandle = extractInstagramHandle(rawText);
     metadata.twitterHandle = extractTwitterHandle(rawText);
 
-    // Extract email
-    metadata.email = extractEmail(rawText);
+    // Extract emails (can be multiple)
+    metadata.emails = extractEmails(rawText);
 
     // Extract usage/license terms
     extractUsageTerms(rawText, metadata);
@@ -172,10 +175,49 @@ juce::String MetadataParser::extractTwitterHandle(const juce::String& text)
 }
 
 //==============================================================================
-// Email Extraction
+// Key Extraction
 //==============================================================================
-juce::String MetadataParser::extractEmail(const juce::String& text)
+juce::String MetadataParser::extractKey(const juce::String& text, juce::String& source)
 {
+    auto lines = juce::StringArray::fromLines(text);
+
+    for (const auto& line : lines)
+    {
+        auto trimmed = line.trim();
+
+        // Remove bullet points
+        if (trimmed.startsWith("•"))
+            trimmed = trimmed.substring(1).trim();
+
+        // Check for "Key: XXX" pattern
+        if (trimmed.toLowerCase().startsWith("key:") ||
+            trimmed.toLowerCase().startsWith("key :"))
+        {
+            auto colonPos = trimmed.indexOf(":");
+            if (colonPos > 0)
+            {
+                auto keyPart = trimmed.substring(colonPos + 1).trim();
+
+                // Validate it looks like a musical key
+                // Examples: C, C#, Db, C min, C# minor, Bb major
+                if (keyPart.length() >= 1 && keyPart.length() <= 10)
+                {
+                    source = "Found in line: " + line.trim();
+                    return keyPart;
+                }
+            }
+        }
+    }
+
+    return {};
+}
+
+//==============================================================================
+// Email Extraction (Multiple)
+//==============================================================================
+juce::StringArray MetadataParser::extractEmails(const juce::String& text)
+{
+    juce::StringArray emails;
     auto lines = juce::StringArray::fromLines(text);
 
     for (const auto& line : lines)
@@ -183,7 +225,7 @@ juce::String MetadataParser::extractEmail(const juce::String& text)
         // Simple email pattern: word@word.word
         if (line.contains("@") && line.contains("."))
         {
-            auto words = juce::StringArray::fromTokens(line, " \t:,", "");
+            auto words = juce::StringArray::fromTokens(line, " \t:,/", "");
             for (const auto& word : words)
             {
                 if (word.contains("@") && word.contains("."))
@@ -195,14 +237,18 @@ juce::String MetadataParser::extractEmail(const juce::String& text)
                     {
                         // Basic validation
                         if (word.length() < 100 && !word.containsChar(' '))
-                            return word;
+                        {
+                            // Avoid duplicates
+                            if (!emails.contains(word))
+                                emails.add(word);
+                        }
                     }
                 }
             }
         }
     }
 
-    return {};
+    return emails;
 }
 
 //==============================================================================
@@ -409,9 +455,42 @@ juce::String MetadataParser::cleanDescription(const juce::String& text, int& lin
 bool MetadataParser::containsIgnoreSeparator(const juce::String& line)
 {
     auto lower = line.toLowerCase().trim();
-    return lower.contains("ignore") ||
-           lower.startsWith("---") ||
-           lower.startsWith("___");
+    auto trimmed = line.trim();
+
+    // Common patterns:
+    // "IGNORE !"
+    // "Ignore Tags:"
+    // "Tags (IGNORE)"
+    // "_______________"
+    // "-------------------"
+    // "================================================================"
+
+    if (lower.contains("ignore"))
+        return true;
+
+    if (trimmed.startsWith("---") || trimmed.startsWith("___") ||
+        trimmed.startsWith("===") || trimmed.startsWith("***"))
+        return true;
+
+    // Long separator lines (15+ repeating chars)
+    if (trimmed.length() >= 15)
+    {
+        bool allSameChar = true;
+        auto firstChar = trimmed[0];
+        for (int i = 1; i < trimmed.length(); ++i)
+        {
+            if (trimmed[i] != firstChar && trimmed[i] != ' ')
+            {
+                allSameChar = false;
+                break;
+            }
+        }
+        if (allSameChar && (firstChar == '-' || firstChar == '_' ||
+                           firstChar == '=' || firstChar == '*'))
+            return true;
+    }
+
+    return false;
 }
 
 juce::String MetadataParser::normalizeWhitespace(const juce::String& text)

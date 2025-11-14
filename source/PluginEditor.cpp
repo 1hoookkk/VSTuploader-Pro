@@ -179,6 +179,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     parsedSectionLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
     addAndMakeVisible (parsedSectionLabel);
 
+    keyLabel.setFont (juce::Font (11.0f));
+    keyLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (keyLabel);
+
     instagramLabel.setFont (juce::Font (11.0f));
     instagramLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (instagramLabel);
@@ -216,7 +220,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     // Initialize metadata display
     updateMetadataDisplay();
 
-    setSize (700, 850);
+    setSize (700, 880);
 }
 
 PluginEditor::~PluginEditor()
@@ -272,12 +276,13 @@ void PluginEditor::resized()
     // Parsed metadata section
     parsedSectionLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
 
-    auto metadataArea = area.removeFromTop(180).reduced(20, 5);
+    auto metadataArea = area.removeFromTop(200).reduced(20, 5);
     int lineHeight = 22;
 
+    keyLabel.setBounds (metadataArea.removeFromTop(lineHeight));
     instagramLabel.setBounds (metadataArea.removeFromTop(lineHeight));
     twitterLabel.setBounds (metadataArea.removeFromTop(lineHeight));
-    emailLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    emailLabel.setBounds (metadataArea.removeFromTop(lineHeight * 2));  // More space for multiple emails
     usageLabel.setBounds (metadataArea.removeFromTop(lineHeight));
 
     metadataArea.removeFromTop(5);
@@ -335,10 +340,12 @@ void PluginEditor::handlePasteAndParse()
     juce::String statusMessage = "Parsed! ";
     if (parsedMetadata.bpm > 0)
         statusMessage += "BPM: " + juce::String(parsedMetadata.bpm) + " | ";
+    if (parsedMetadata.key.isNotEmpty())
+        statusMessage += "Key: " + parsedMetadata.key + " | ";
     if (parsedMetadata.tags.size() > 0)
-        statusMessage += juce::String(parsedMetadata.tags.size()) + " tags | ";
+        statusMessage += juce::String(parsedMetadata.tags.size()) + " tags";
     if (parsedMetadata.tagsDeduped > 0)
-        statusMessage += juce::String(parsedMetadata.tagsDeduped) + " dupes removed";
+        statusMessage += " (" + juce::String(parsedMetadata.tagsDeduped) + " dupes removed)";
 
     statusLabel.setText (statusMessage, juce::dontSendNotification);
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
@@ -346,6 +353,12 @@ void PluginEditor::handlePasteAndParse()
 
 void PluginEditor::updateMetadataDisplay()
 {
+    // Key
+    if (parsedMetadata.key.isNotEmpty())
+        keyLabel.setText ("Key: " + parsedMetadata.key, juce::dontSendNotification);
+    else
+        keyLabel.setText ("Key: (not found)", juce::dontSendNotification);
+
     // Instagram
     if (parsedMetadata.instagramHandle.isNotEmpty())
         instagramLabel.setText ("Instagram: @" + parsedMetadata.instagramHandle, juce::dontSendNotification);
@@ -358,11 +371,22 @@ void PluginEditor::updateMetadataDisplay()
     else
         twitterLabel.setText ("Twitter: (not found)", juce::dontSendNotification);
 
-    // Email
-    if (parsedMetadata.email.isNotEmpty())
-        emailLabel.setText ("Email: " + parsedMetadata.email, juce::dontSendNotification);
+    // Emails (can be multiple)
+    if (parsedMetadata.emails.size() > 0)
+    {
+        juce::String emailText = "Email: ";
+        for (int i = 0; i < parsedMetadata.emails.size(); ++i)
+        {
+            emailText += parsedMetadata.emails[i];
+            if (i < parsedMetadata.emails.size() - 1)
+                emailText += ", ";
+        }
+        emailLabel.setText (emailText, juce::dontSendNotification);
+    }
     else
+    {
         emailLabel.setText ("Email: (not found)", juce::dontSendNotification);
+    }
 
     // Usage terms
     if (parsedMetadata.usageTerms.isNotEmpty())

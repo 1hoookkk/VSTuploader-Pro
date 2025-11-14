@@ -9,9 +9,12 @@ struct ParsedMetadata
     int bpm = 0;
     juce::String bpmSource;  // Where we found it (for debugging)
 
+    juce::String key;  // Musical key (e.g., "C min", "C#", "Bb")
+    juce::String keySource;
+
     juce::String instagramHandle;
     juce::String twitterHandle;
-    juce::String email;
+    juce::StringArray emails;  // Can have multiple emails
 
     juce::String usageTerms;
     bool isFreeNonProfit = false;
@@ -31,9 +34,11 @@ struct ParsedMetadata
     {
         bpm = 0;
         bpmSource.clear();
+        key.clear();
+        keySource.clear();
         instagramHandle.clear();
         twitterHandle.clear();
-        email.clear();
+        emails.clear();
         usageTerms.clear();
         isFreeNonProfit = false;
         requiresCredit = false;
@@ -58,9 +63,10 @@ public:
 
     // Individual extraction methods
     int extractBPM(const juce::String& text, juce::String& source);
+    juce::String extractKey(const juce::String& text, juce::String& source);
     juce::String extractInstagramHandle(const juce::String& text);
     juce::String extractTwitterHandle(const juce::String& text);
-    juce::String extractEmail(const juce::String& text);
+    juce::StringArray extractEmails(const juce::String& text);
 
     void extractUsageTerms(const juce::String& text, ParsedMetadata& metadata);
     juce::StringArray extractTags(const juce::String& text);

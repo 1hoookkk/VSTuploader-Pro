@@ -67,6 +67,7 @@ private:
 
     // Parsed metadata display
     juce::Label parsedSectionLabel;
+    juce::Label keyLabel;
     juce::Label instagramLabel;
     juce::Label twitterLabel;
     juce::Label emailLabel;
