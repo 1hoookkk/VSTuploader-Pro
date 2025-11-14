@@ -1,48 +1,392 @@
 #include "PluginEditor.h"
 
+//==============================================================================
+// DragDropZone Implementation
+//==============================================================================
+DragDropZone::DragDropZone()
+{
+}
+
+void DragDropZone::paint (juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().reduced(10);
+
+    // Draw dashed border
+    g.setColour (isDragging ? juce::Colours::lightblue : juce::Colours::grey);
+
+    const float dashLengths[] = { 10.0f, 5.0f };
+    g.drawDashedLine (juce::Line<float>(bounds.getTopLeft().toFloat(),
+                                        bounds.getTopRight().toFloat()),
+                     dashLengths, 2, 2.0f);
+    g.drawDashedLine (juce::Line<float>(bounds.getTopRight().toFloat(),
+                                        bounds.getBottomRight().toFloat()),
+                     dashLengths, 2, 2.0f);
+    g.drawDashedLine (juce::Line<float>(bounds.getBottomRight().toFloat(),
+                                        bounds.getBottomLeft().toFloat()),
+                     dashLengths, 2, 2.0f);
+    g.drawDashedLine (juce::Line<float>(bounds.getBottomLeft().toFloat(),
+                                        bounds.getTopLeft().toFloat()),
+                     dashLengths, 2, 2.0f);
+
+    // Background fill
+    if (isDragging)
+    {
+        g.setColour (juce::Colours::lightblue.withAlpha(0.1f));
+        g.fillRect (bounds);
+    }
+
+    // Draw icon or text
+    g.setColour (isDragging ? juce::Colours::white : juce::Colours::lightgrey);
+    g.setFont (18.0f);
+
+    if (droppedFileName.isEmpty())
+    {
+        g.drawText ("Drop Audio File Here\n(WAV, MP3, FLAC, AIFF)",
+                   bounds, juce::Justification::centred);
+    }
+    else
+    {
+        g.setFont (16.0f);
+        g.setColour (juce::Colours::lightgreen);
+        g.drawText ("✓ File Loaded", bounds.removeFromTop(30),
+                   juce::Justification::centred);
+
+        g.setFont (14.0f);
+        g.setColour (juce::Colours::white);
+        g.drawText (droppedFileName, bounds,
+                   juce::Justification::centred);
+    }
+}
+
+bool DragDropZone::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    // Check if any of the files are audio files
+    for (const auto& filepath : files)
+    {
+        juce::File file (filepath);
+        juce::String extension = file.getFileExtension().toLowerCase();
+
+        if (extension == ".wav" || extension == ".mp3" ||
+            extension == ".flac" || extension == ".aiff" ||
+            extension == ".aif" || extension == ".ogg")
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DragDropZone::filesDropped (const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused (x, y);
+
+    isDragging = false;
+
+    if (files.size() > 0)
+    {
+        juce::File file (files[0]);
+        droppedFileName = file.getFileName();
+
+        if (onFileDropped)
+            onFileDropped (file);
+
+        repaint();
+    }
+}
+
+void DragDropZone::fileDragEnter (const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused (files, x, y);
+    isDragging = true;
+    repaint();
+}
+
+void DragDropZone::fileDragExit (const juce::StringArray& files)
+{
+    juce::ignoreUnused (files);
+    isDragging = false;
+    repaint();
+}
+
+void DragDropZone::setDroppedFileName (const juce::String& name)
+{
+    droppedFileName = name;
+    repaint();
+}
+
+//==============================================================================
+// PluginEditor Implementation
+//==============================================================================
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
-    juce::ignoreUnused (processorRef);
+    // Setup title label
+    titleLabel.setText ("VSTuploader Pro", juce::dontSendNotification);
+    titleLabel.setFont (juce::Font (28.0f, juce::Font::bold));
+    titleLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    titleLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (titleLabel);
 
+    // Setup BPM label
+    bpmLabel.setText ("BPM: --", juce::dontSendNotification);
+    bpmLabel.setFont (juce::Font (20.0f, juce::Font::bold));
+    bpmLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
+    bpmLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (bpmLabel);
+
+    // Setup file name label
+    fileNameLabel.setText ("", juce::dontSendNotification);
+    fileNameLabel.setFont (juce::Font (14.0f));
+    fileNameLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    fileNameLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (fileNameLabel);
+
+    // Setup status label
+    statusLabel.setText ("Ready to upload beats to YouTube", juce::dontSendNotification);
+    statusLabel.setFont (juce::Font (12.0f));
+    statusLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
+    statusLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (statusLabel);
+
+    // Setup drag-drop zone
+    dragDropZone.onFileDropped = [this](juce::File file) { handleFileDropped(file); };
+    addAndMakeVisible (dragDropZone);
+
+    // Setup Paste & Parse section
+    pasteLabel.setText ("Paste YouTube Description:", juce::dontSendNotification);
+    pasteLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    pasteLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (pasteLabel);
+
+    pasteTextEditor.setMultiLine (true);
+    pasteTextEditor.setReturnKeyStartsNewLine (true);
+    pasteTextEditor.setScrollbarsShown (true);
+    pasteTextEditor.setCaretVisible (true);
+    pasteTextEditor.setPopupMenuEnabled (true);
+    pasteTextEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff2a2a2a));
+    pasteTextEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+    pasteTextEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::grey);
+    pasteTextEditor.setFont (juce::Font (12.0f));
+    addAndMakeVisible (pasteTextEditor);
+
+    parseButton.onClick = [this]() { handlePasteAndParse(); };
+    parseButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4a9eff));
+    addAndMakeVisible (parseButton);
+
+    // Setup parsed metadata display
+    parsedSectionLabel.setText ("Parsed Metadata:", juce::dontSendNotification);
+    parsedSectionLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    parsedSectionLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
+    addAndMakeVisible (parsedSectionLabel);
+
+    instagramLabel.setFont (juce::Font (11.0f));
+    instagramLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (instagramLabel);
+
+    twitterLabel.setFont (juce::Font (11.0f));
+    twitterLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (twitterLabel);
+
+    emailLabel.setFont (juce::Font (11.0f));
+    emailLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (emailLabel);
+
+    usageLabel.setFont (juce::Font (11.0f));
+    usageLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+    addAndMakeVisible (usageLabel);
+
+    tagsLabel.setFont (juce::Font (10.0f));
+    tagsLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (tagsLabel);
+
+    // Setup inspector button (for debugging)
     addAndMakeVisible (inspectButton);
-
-    // this chunk of code instantiates and opens the melatonin inspector
     inspectButton.onClick = [&] {
         if (!inspector)
         {
             inspector = std::make_unique<melatonin::Inspector> (*this);
             inspector->onClose = [this]() { inspector.reset(); };
         }
-
         inspector->setVisible (true);
     };
 
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (400, 300);
+    // Start timer to update BPM display (30 fps)
+    startTimerHz (30);
+
+    // Initialize metadata display
+    updateMetadataDisplay();
+
+    setSize (700, 850);
 }
 
 PluginEditor::~PluginEditor()
 {
+    stopTimer();
 }
 
 void PluginEditor::paint (juce::Graphics& g)
 {
-    // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+    // Modern gradient background
+    g.fillAll (juce::Colour (0xff1a1a1a));
 
-    auto area = getLocalBounds();
-    g.setColour (juce::Colours::white);
-    g.setFont (16.0f);
-    auto helloWorld = juce::String ("Hello from ") + PRODUCT_NAME_WITHOUT_VERSION + " v" VERSION + " running in " + CMAKE_BUILD_TYPE;
-    g.drawText (helloWorld, area.removeFromTop (150), juce::Justification::centred, false);
+    auto bounds = getLocalBounds();
+    juce::ColourGradient gradient (juce::Colour (0xff2a2a2a),
+                                   bounds.getTopLeft().toFloat(),
+                                   juce::Colour (0xff1a1a1a),
+                                   bounds.getBottomRight().toFloat(),
+                                   false);
+    g.setGradientFill (gradient);
+    g.fillAll();
 }
 
 void PluginEditor::resized()
 {
-    // layout the positions of your child components here
     auto area = getLocalBounds();
-    area.removeFromBottom(50);
-    inspectButton.setBounds (getLocalBounds().withSizeKeepingCentre(100, 50));
+
+    // Title at top
+    titleLabel.setBounds (area.removeFromTop(50).reduced(20, 10));
+
+    // BPM display
+    bpmLabel.setBounds (area.removeFromTop(35).reduced(20, 5));
+
+    area.removeFromTop(5); // Spacing
+
+    // Drag-drop zone (smaller now)
+    auto dropZoneHeight = 120;
+    dragDropZone.setBounds (area.removeFromTop(dropZoneHeight).reduced(30, 10));
+
+    // File name label
+    fileNameLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    area.removeFromTop(10); // Spacing
+
+    // Paste & Parse section
+    pasteLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    auto pasteArea = area.removeFromTop(150);
+    pasteTextEditor.setBounds (pasteArea.reduced(20, 5).removeFromLeft(pasteArea.getWidth() - 140));
+    parseButton.setBounds (pasteArea.reduced(20, 5).removeFromRight(110).withHeight(35).withY(pasteArea.getY() + 60));
+
+    area.removeFromTop(10); // Spacing
+
+    // Parsed metadata section
+    parsedSectionLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    auto metadataArea = area.removeFromTop(180).reduced(20, 5);
+    int lineHeight = 22;
+
+    instagramLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    twitterLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    emailLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    usageLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+
+    metadataArea.removeFromTop(5);
+    tagsLabel.setBounds (metadataArea.removeFromTop(80));
+
+    area.removeFromTop(10); // Spacing
+
+    // Status label
+    statusLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    // Inspector button at bottom (for debugging)
+    inspectButton.setBounds (area.removeFromBottom(30).withSizeKeepingCentre(120, 25));
+}
+
+void PluginEditor::timerCallback()
+{
+    // Update BPM display from host
+    double currentBPM = processorRef.getCurrentBPM();
+    bpmLabel.setText ("BPM: " + juce::String (currentBPM, 1),
+                     juce::dontSendNotification);
+}
+
+void PluginEditor::handleFileDropped (juce::File file)
+{
+    droppedAudioFile = file;
+
+    // Update file name label
+    fileNameLabel.setText ("File: " + file.getFileName(),
+                          juce::dontSendNotification);
+
+    // Update status
+    statusLabel.setText ("File loaded! Ready for YouTube upload",
+                        juce::dontSendNotification);
+    statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+}
+
+void PluginEditor::handlePasteAndParse()
+{
+    auto inputText = pasteTextEditor.getText();
+
+    if (inputText.isEmpty())
+    {
+        statusLabel.setText ("Paste some text first!", juce::dontSendNotification);
+        statusLabel.setColour (juce::Label::textColourId, juce::Colours::orange);
+        return;
+    }
+
+    // Parse the metadata
+    parsedMetadata = metadataParser.parse(inputText);
+
+    // Update the display
+    updateMetadataDisplay();
+
+    // Update status
+    juce::String statusMessage = "Parsed! ";
+    if (parsedMetadata.bpm > 0)
+        statusMessage += "BPM: " + juce::String(parsedMetadata.bpm) + " | ";
+    if (parsedMetadata.tags.size() > 0)
+        statusMessage += juce::String(parsedMetadata.tags.size()) + " tags | ";
+    if (parsedMetadata.tagsDeduped > 0)
+        statusMessage += juce::String(parsedMetadata.tagsDeduped) + " dupes removed";
+
+    statusLabel.setText (statusMessage, juce::dontSendNotification);
+    statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+}
+
+void PluginEditor::updateMetadataDisplay()
+{
+    // Instagram
+    if (parsedMetadata.instagramHandle.isNotEmpty())
+        instagramLabel.setText ("Instagram: @" + parsedMetadata.instagramHandle, juce::dontSendNotification);
+    else
+        instagramLabel.setText ("Instagram: (not found)", juce::dontSendNotification);
+
+    // Twitter
+    if (parsedMetadata.twitterHandle.isNotEmpty())
+        twitterLabel.setText ("Twitter: @" + parsedMetadata.twitterHandle, juce::dontSendNotification);
+    else
+        twitterLabel.setText ("Twitter: (not found)", juce::dontSendNotification);
+
+    // Email
+    if (parsedMetadata.email.isNotEmpty())
+        emailLabel.setText ("Email: " + parsedMetadata.email, juce::dontSendNotification);
+    else
+        emailLabel.setText ("Email: (not found)", juce::dontSendNotification);
+
+    // Usage terms
+    if (parsedMetadata.usageTerms.isNotEmpty())
+        usageLabel.setText ("Usage: " + parsedMetadata.usageTerms, juce::dontSendNotification);
+    else
+        usageLabel.setText ("Usage: (not detected)", juce::dontSendNotification);
+
+    // Tags
+    if (parsedMetadata.tags.size() > 0)
+    {
+        juce::String tagString = "Tags (" + juce::String(parsedMetadata.tags.size()) + "): ";
+        for (int i = 0; i < juce::jmin(10, parsedMetadata.tags.size()); ++i)
+        {
+            tagString += parsedMetadata.tags[i];
+            if (i < juce::jmin(9, parsedMetadata.tags.size() - 1))
+                tagString += ", ";
+        }
+        if (parsedMetadata.tags.size() > 10)
+            tagString += "... +" + juce::String(parsedMetadata.tags.size() - 10) + " more";
+
+        tagsLabel.setText (tagString, juce::dontSendNotification);
+    }
+    else
+    {
+        tagsLabel.setText ("Tags: (none found)", juce::dontSendNotification);
+    }
 }
