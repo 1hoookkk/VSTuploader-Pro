@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "BinaryData.h"
 #include "MetadataParser.h"
+#include "YouTubeUploader.h"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 //==============================================================================
@@ -48,6 +49,9 @@ private:
     void handleFileDropped (juce::File file);
     void handlePasteAndParse();
     void updateMetadataDisplay();
+    void handleConnectYouTube();
+    void handleUploadToYouTube();
+    void updateYouTubeStatus();
 
     PluginProcessor& processorRef;
     std::unique_ptr<melatonin::Inspector> inspector;
@@ -78,6 +82,13 @@ private:
     juce::File droppedAudioFile;
     MetadataParser metadataParser;
     ParsedMetadata parsedMetadata;
+    YouTubeUploader youtubeUploader;
+
+    // YouTube UI components
+    juce::Label youtubeLabel;
+    juce::TextButton connectYouTubeButton { "Connect YouTube" };
+    juce::Label youtubeStatusLabel;
+    juce::TextButton uploadButton { "Upload to YouTube" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

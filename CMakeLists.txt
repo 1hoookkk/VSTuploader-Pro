@@ -72,6 +72,10 @@ juce_add_plugin("${PROJECT_NAME}"
     # On MacOS, plugin is copied to /Users/yourname/Library/Audio/Plug-Ins/
     COPY_PLUGIN_AFTER_BUILD TRUE
 
+    # Enable web browser and CURL for YouTube OAuth integration
+    NEEDS_WEB_BROWSER TRUE
+    NEEDS_CURL TRUE
+
     # A four-character plugin id
     # First character MUST be uppercase for AU formats
     PLUGIN_MANUFACTURER_CODE Vstu
@@ -117,9 +121,9 @@ include(XcodePrettify)
 target_compile_definitions(SharedCode
     INTERFACE
 
-    # JUCE_WEB_BROWSER and JUCE_USE_CURL off by default
-    JUCE_WEB_BROWSER=0  # If you set this to 1, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
-    JUCE_USE_CURL=0     # If you set this to 1, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
+    # Enable JUCE web browser and CURL for YouTube OAuth and API integration
+    JUCE_WEB_BROWSER=1  # Required for launching browser for OAuth flow
+    JUCE_USE_CURL=1     # Required for HTTP/HTTPS requests to YouTube API
     JUCE_VST3_CAN_REPLACE_VST2=0
 
     # Uncomment if you are paying for a an Indie/Pro license or releasing under GPLv3

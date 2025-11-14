@@ -203,6 +203,53 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     tagsLabel.setColour (juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible (tagsLabel);
 
+    // Setup YouTube section
+    youtubeLabel.setText ("YouTube Upload:", juce::dontSendNotification);
+    youtubeLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    youtubeLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (youtubeLabel);
+
+    connectYouTubeButton.onClick = [this]() { handleConnectYouTube(); };
+    connectYouTubeButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xffff0000)); // YouTube red
+    addAndMakeVisible (connectYouTubeButton);
+
+    youtubeStatusLabel.setFont (juce::Font (11.0f));
+    youtubeStatusLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
+    addAndMakeVisible (youtubeStatusLabel);
+
+    uploadButton.onClick = [this]() { handleUploadToYouTube(); };
+    uploadButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4a9eff));
+    uploadButton.setEnabled (false); // Disabled until connected
+    addAndMakeVisible (uploadButton);
+
+    // Setup YouTube callbacks
+    youtubeUploader.onAuthComplete = [this](bool success, juce::String message)
+    {
+        juce::MessageManager::callAsync([this, success, message]()
+        {
+            if (success)
+            {
+                updateYouTubeStatus();
+                uploadButton.setEnabled(true);
+            }
+            statusLabel.setText(message, juce::dontSendNotification);
+            statusLabel.setColour(juce::Label::textColourId,
+                                 success ? juce::Colours::lightgreen : juce::Colours::orange);
+        });
+    };
+
+    youtubeUploader.onError = [this](juce::String error)
+    {
+        juce::MessageManager::callAsync([this, error]()
+        {
+            statusLabel.setText(error, juce::dontSendNotification);
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+        });
+    };
+
+    // Update YouTube status on startup
+    updateYouTubeStatus();
+
     // Setup inspector button (for debugging)
     addAndMakeVisible (inspectButton);
     inspectButton.onClick = [&] {
@@ -220,7 +267,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     // Initialize metadata display
     updateMetadataDisplay();
 
-    setSize (700, 880);
+    setSize (700, 1000);
 }
 
 PluginEditor::~PluginEditor()
@@ -287,6 +334,20 @@ void PluginEditor::resized()
 
     metadataArea.removeFromTop(5);
     tagsLabel.setBounds (metadataArea.removeFromTop(80));
+
+    area.removeFromTop(10); // Spacing
+
+    // YouTube section
+    youtubeLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    auto youtubeArea = area.removeFromTop(80).reduced(20, 5);
+    auto leftYT = youtubeArea.removeFromLeft(youtubeArea.getWidth() / 2);
+    auto rightYT = youtubeArea;
+
+    connectYouTubeButton.setBounds (leftYT.removeFromTop(35).reduced(5));
+    youtubeStatusLabel.setBounds (leftYT.removeFromTop(40).reduced(5));
+
+    uploadButton.setBounds (rightYT.removeFromTop(35).reduced(5));
 
     area.removeFromTop(10); // Spacing
 
@@ -412,5 +473,104 @@ void PluginEditor::updateMetadataDisplay()
     else
     {
         tagsLabel.setText ("Tags: (none found)", juce::dontSendNotification);
+    }
+}
+
+void PluginEditor::handleConnectYouTube()
+{
+    if (youtubeUploader.isAuthenticated())
+    {
+        // Disconnect
+        youtubeUploader.disconnect();
+        updateYouTubeStatus();
+        uploadButton.setEnabled(false);
+        statusLabel.setText("Disconnected from YouTube", juce::dontSendNotification);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+    }
+    else
+    {
+        // Start OAuth flow
+        youtubeUploader.startAuth();
+        statusLabel.setText("Opening browser for YouTube authorization...", juce::dontSendNotification);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::lightblue);
+    }
+}
+
+void PluginEditor::handleUploadToYouTube()
+{
+    if (!youtubeUploader.isAuthenticated())
+    {
+        statusLabel.setText("Please connect to YouTube first", juce::dontSendNotification);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+        return;
+    }
+
+    if (!droppedAudioFile.existsAsFile())
+    {
+        statusLabel.setText("Please drop an audio file first", juce::dontSendNotification);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::orange);
+        return;
+    }
+
+    // Build metadata from parsed data
+    YouTubeUploadMetadata metadata;
+    metadata.title = droppedAudioFile.getFileNameWithoutExtension();
+    metadata.description = parsedMetadata.cleanDescription;
+    metadata.tags = parsedMetadata.tags;
+    metadata.privacy = "unlisted"; // Default to unlisted
+    metadata.categoryId = "10"; // Music category
+
+    // TODO: Create thumbnail (for now, use default)
+    juce::File thumbnailFile;
+
+    // Start upload
+    statusLabel.setText("Uploading to YouTube...", juce::dontSendNotification);
+    statusLabel.setColour(juce::Label::textColourId, juce::Colours::lightblue);
+
+    bool success = youtubeUploader.uploadVideo(
+        droppedAudioFile,
+        thumbnailFile,
+        metadata,
+        [this](float progress)
+        {
+            juce::MessageManager::callAsync([this, progress]()
+            {
+                statusLabel.setText("Uploading: " + juce::String(int(progress * 100)) + "%",
+                                   juce::dontSendNotification);
+            });
+        });
+
+    if (!success)
+    {
+        statusLabel.setText("Upload failed. See console for details.", juce::dontSendNotification);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+    }
+}
+
+void PluginEditor::updateYouTubeStatus()
+{
+    if (youtubeUploader.isAuthenticated())
+    {
+        auto channelInfo = youtubeUploader.getChannelInfo();
+        if (channelInfo.channelName.isNotEmpty())
+        {
+            youtubeStatusLabel.setText("Connected: " + channelInfo.channelName,
+                                      juce::dontSendNotification);
+            youtubeStatusLabel.setColour(juce::Label::textColourId, juce::Colours::lightgreen);
+            connectYouTubeButton.setButtonText("Disconnect");
+        }
+        else
+        {
+            youtubeStatusLabel.setText("Connected (loading channel...)",
+                                      juce::dontSendNotification);
+            youtubeStatusLabel.setColour(juce::Label::textColourId, juce::Colours::lightblue);
+            connectYouTubeButton.setButtonText("Disconnect");
+        }
+    }
+    else
+    {
+        youtubeStatusLabel.setText("Not connected", juce::dontSendNotification);
+        youtubeStatusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+        connectYouTubeButton.setButtonText("Connect YouTube");
     }
 }
