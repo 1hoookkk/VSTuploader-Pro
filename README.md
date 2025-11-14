@@ -9,15 +9,22 @@ Beat producers who waste 30+ minutes per upload dealing with manual YouTube proc
 
 ## Current Status: Week 1 MVP
 
-### ✅ Completed Features (v0.1.0)
+### ✅ Completed Features (v0.2.0)
 - ✅ Basic JUCE VST3/AU plugin shell
 - ✅ Drag-drop audio file support (WAV, MP3, FLAC, AIFF)
 - ✅ BPM reading from DAW host
 - ✅ Modern, clean UI with visual feedback
 - ✅ File validation and display
+- ✅ **Paste & Parse** - Auto-extract metadata from YouTube descriptions:
+  - BPM extraction (multiple formats: "BPM: 148", "148 BPM", etc.)
+  - Social handles (Instagram, Twitter)
+  - Email addresses
+  - Usage/license terms detection
+  - Hashtag and tag parsing
+  - **Clean & Pack** - Automatic tag deduplication and 500-char limit enforcement
+  - Separator detection (removes content after "IGNORE !")
 
 ### 🚧 Coming Soon (Week 1)
-- "Paste & Parse" - Auto-extract BPM, tags, and socials from YouTube descriptions
 - YouTube OAuth authentication
 - MP4 encoding (audio + static image)
 - Basic YouTube upload functionality
@@ -43,7 +50,8 @@ Beat producers who waste 30+ minutes per upload dealing with manual YouTube proc
 /VSTuploaderPro
   /source
     ├── PluginProcessor.cpp/h   - Audio processor with BPM reading
-    ├── PluginEditor.cpp/h      - UI with drag-drop functionality
+    ├── PluginEditor.cpp/h      - UI with drag-drop and Paste & Parse
+    ├── MetadataParser.cpp/h    - Intelligent metadata extraction engine
   /Resources
     └── README.md               - Resource documentation
   /tests
@@ -101,14 +109,43 @@ ctest -C Release
 1. **Load the Plugin**: Open VSTuploader Pro in your DAW
 2. **Drop Your Beat**: Drag and drop your audio file (WAV, MP3, FLAC, AIFF) into the plugin
 3. **Check BPM**: The plugin automatically reads the BPM from your DAW host
-4. **Ready to Upload**: (Coming soon) Click upload to send directly to YouTube
+4. **Paste & Parse**: Paste your YouTube description text and click "Paste & Parse"
+   - Automatically extracts: BPM, Instagram, Twitter, Email, Usage terms, Tags
+   - Removes duplicate tags and enforces YouTube's 500-char tag limit
+   - Cleans up separator lines and content after "IGNORE !"
+5. **Review Metadata**: Check the parsed metadata below the text box
+6. **Ready to Upload**: (Coming soon) Click upload to send directly to YouTube
+
+### Example: Paste & Parse
+
+**Input:**
+```
+• BPM: 148
+• Leave A Like If You Enjoyed 💯 🤝
+• / bapebrazy
+       Twitter:bapebrazyy
+• Email For WAV, Exclusive, etc: Bapebrazy1@gmail.com
+• [FREE] For NON-Profit Use, Credit Me! [prod.bapebrazy]
+
+IGNORE !
+_______________________________________________
+hip hop beats, instrumental, ballout, #BankrollFreshTypeBeat #DrichTypeBeat
+```
+
+**Output:**
+- BPM: 148
+- Instagram: @bapebrazy
+- Twitter: @bapebrazyy
+- Email: Bapebrazy1@gmail.com
+- Usage: [FREE] Non-profit use with credit required
+- Tags: bankroll fresh type beat, drich type beat, hip hop beats, instrumental, ballout (cleaned & deduped)
 
 ## Development Roadmap
 
 ### Week 1 (Current)
 - [x] Basic plugin shell with drag-drop
 - [x] BPM reading from host
-- [ ] Paste & Parse metadata extraction
+- [x] Paste & Parse metadata extraction
 - [ ] YouTube OAuth integration
 - [ ] MP4 encoding pipeline
 - [ ] Basic YouTube upload

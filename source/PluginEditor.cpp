@@ -152,6 +152,53 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     dragDropZone.onFileDropped = [this](juce::File file) { handleFileDropped(file); };
     addAndMakeVisible (dragDropZone);
 
+    // Setup Paste & Parse section
+    pasteLabel.setText ("Paste YouTube Description:", juce::dontSendNotification);
+    pasteLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    pasteLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (pasteLabel);
+
+    pasteTextEditor.setMultiLine (true);
+    pasteTextEditor.setReturnKeyStartsNewLine (true);
+    pasteTextEditor.setScrollbarsShown (true);
+    pasteTextEditor.setCaretVisible (true);
+    pasteTextEditor.setPopupMenuEnabled (true);
+    pasteTextEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff2a2a2a));
+    pasteTextEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+    pasteTextEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::grey);
+    pasteTextEditor.setFont (juce::Font (12.0f));
+    addAndMakeVisible (pasteTextEditor);
+
+    parseButton.onClick = [this]() { handlePasteAndParse(); };
+    parseButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4a9eff));
+    addAndMakeVisible (parseButton);
+
+    // Setup parsed metadata display
+    parsedSectionLabel.setText ("Parsed Metadata:", juce::dontSendNotification);
+    parsedSectionLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    parsedSectionLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
+    addAndMakeVisible (parsedSectionLabel);
+
+    instagramLabel.setFont (juce::Font (11.0f));
+    instagramLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (instagramLabel);
+
+    twitterLabel.setFont (juce::Font (11.0f));
+    twitterLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (twitterLabel);
+
+    emailLabel.setFont (juce::Font (11.0f));
+    emailLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (emailLabel);
+
+    usageLabel.setFont (juce::Font (11.0f));
+    usageLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+    addAndMakeVisible (usageLabel);
+
+    tagsLabel.setFont (juce::Font (10.0f));
+    tagsLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (tagsLabel);
+
     // Setup inspector button (for debugging)
     addAndMakeVisible (inspectButton);
     inspectButton.onClick = [&] {
@@ -166,7 +213,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     // Start timer to update BPM display (30 fps)
     startTimerHz (30);
 
-    setSize (600, 500);
+    // Initialize metadata display
+    updateMetadataDisplay();
+
+    setSize (700, 850);
 }
 
 PluginEditor::~PluginEditor()
@@ -194,23 +244,46 @@ void PluginEditor::resized()
     auto area = getLocalBounds();
 
     // Title at top
-    titleLabel.setBounds (area.removeFromTop(60).reduced(20, 15));
+    titleLabel.setBounds (area.removeFromTop(50).reduced(20, 10));
 
     // BPM display
-    bpmLabel.setBounds (area.removeFromTop(40).reduced(20, 5));
+    bpmLabel.setBounds (area.removeFromTop(35).reduced(20, 5));
 
-    area.removeFromTop(10); // Spacing
+    area.removeFromTop(5); // Spacing
 
-    // Drag-drop zone in center
-    auto dropZoneHeight = 200;
-    dragDropZone.setBounds (area.removeFromTop(dropZoneHeight).reduced(40, 20));
-
-    area.removeFromTop(10); // Spacing
+    // Drag-drop zone (smaller now)
+    auto dropZoneHeight = 120;
+    dragDropZone.setBounds (area.removeFromTop(dropZoneHeight).reduced(30, 10));
 
     // File name label
-    fileNameLabel.setBounds (area.removeFromTop(30).reduced(20, 5));
+    fileNameLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
 
-    area.removeFromTop(20); // Spacing
+    area.removeFromTop(10); // Spacing
+
+    // Paste & Parse section
+    pasteLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    auto pasteArea = area.removeFromTop(150);
+    pasteTextEditor.setBounds (pasteArea.reduced(20, 5).removeFromLeft(pasteArea.getWidth() - 140));
+    parseButton.setBounds (pasteArea.reduced(20, 5).removeFromRight(110).withHeight(35).withY(pasteArea.getY() + 60));
+
+    area.removeFromTop(10); // Spacing
+
+    // Parsed metadata section
+    parsedSectionLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+
+    auto metadataArea = area.removeFromTop(180).reduced(20, 5);
+    int lineHeight = 22;
+
+    instagramLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    twitterLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    emailLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    usageLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+
+    metadataArea.removeFromTop(5);
+    tagsLabel.setBounds (metadataArea.removeFromTop(80));
+
+    area.removeFromTop(10); // Spacing
 
     // Status label
     statusLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
@@ -239,6 +312,81 @@ void PluginEditor::handleFileDropped (juce::File file)
     statusLabel.setText ("File loaded! Ready for YouTube upload",
                         juce::dontSendNotification);
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+}
 
-    // TODO: In future, this will trigger metadata parsing and upload prep
+void PluginEditor::handlePasteAndParse()
+{
+    auto inputText = pasteTextEditor.getText();
+
+    if (inputText.isEmpty())
+    {
+        statusLabel.setText ("Paste some text first!", juce::dontSendNotification);
+        statusLabel.setColour (juce::Label::textColourId, juce::Colours::orange);
+        return;
+    }
+
+    // Parse the metadata
+    parsedMetadata = metadataParser.parse(inputText);
+
+    // Update the display
+    updateMetadataDisplay();
+
+    // Update status
+    juce::String statusMessage = "Parsed! ";
+    if (parsedMetadata.bpm > 0)
+        statusMessage += "BPM: " + juce::String(parsedMetadata.bpm) + " | ";
+    if (parsedMetadata.tags.size() > 0)
+        statusMessage += juce::String(parsedMetadata.tags.size()) + " tags | ";
+    if (parsedMetadata.tagsDeduped > 0)
+        statusMessage += juce::String(parsedMetadata.tagsDeduped) + " dupes removed";
+
+    statusLabel.setText (statusMessage, juce::dontSendNotification);
+    statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
+}
+
+void PluginEditor::updateMetadataDisplay()
+{
+    // Instagram
+    if (parsedMetadata.instagramHandle.isNotEmpty())
+        instagramLabel.setText ("Instagram: @" + parsedMetadata.instagramHandle, juce::dontSendNotification);
+    else
+        instagramLabel.setText ("Instagram: (not found)", juce::dontSendNotification);
+
+    // Twitter
+    if (parsedMetadata.twitterHandle.isNotEmpty())
+        twitterLabel.setText ("Twitter: @" + parsedMetadata.twitterHandle, juce::dontSendNotification);
+    else
+        twitterLabel.setText ("Twitter: (not found)", juce::dontSendNotification);
+
+    // Email
+    if (parsedMetadata.email.isNotEmpty())
+        emailLabel.setText ("Email: " + parsedMetadata.email, juce::dontSendNotification);
+    else
+        emailLabel.setText ("Email: (not found)", juce::dontSendNotification);
+
+    // Usage terms
+    if (parsedMetadata.usageTerms.isNotEmpty())
+        usageLabel.setText ("Usage: " + parsedMetadata.usageTerms, juce::dontSendNotification);
+    else
+        usageLabel.setText ("Usage: (not detected)", juce::dontSendNotification);
+
+    // Tags
+    if (parsedMetadata.tags.size() > 0)
+    {
+        juce::String tagString = "Tags (" + juce::String(parsedMetadata.tags.size()) + "): ";
+        for (int i = 0; i < juce::jmin(10, parsedMetadata.tags.size()); ++i)
+        {
+            tagString += parsedMetadata.tags[i];
+            if (i < juce::jmin(9, parsedMetadata.tags.size() - 1))
+                tagString += ", ";
+        }
+        if (parsedMetadata.tags.size() > 10)
+            tagString += "... +" + juce::String(parsedMetadata.tags.size() - 10) + " more";
+
+        tagsLabel.setText (tagString, juce::dontSendNotification);
+    }
+    else
+    {
+        tagsLabel.setText ("Tags: (none found)", juce::dontSendNotification);
+    }
 }

@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "BinaryData.h"
+#include "MetadataParser.h"
 #include "melatonin_inspector/melatonin_inspector.h"
 
 //==============================================================================
@@ -45,6 +46,8 @@ public:
 
 private:
     void handleFileDropped (juce::File file);
+    void handlePasteAndParse();
+    void updateMetadataDisplay();
 
     PluginProcessor& processorRef;
     std::unique_ptr<melatonin::Inspector> inspector;
@@ -57,7 +60,23 @@ private:
     juce::Label fileNameLabel;
     juce::Label statusLabel;
 
+    // Paste & Parse components
+    juce::Label pasteLabel;
+    juce::TextEditor pasteTextEditor;
+    juce::TextButton parseButton { "Paste & Parse" };
+
+    // Parsed metadata display
+    juce::Label parsedSectionLabel;
+    juce::Label instagramLabel;
+    juce::Label twitterLabel;
+    juce::Label emailLabel;
+    juce::Label usageLabel;
+    juce::Label tagsLabel;
+
+    // Data
     juce::File droppedAudioFile;
+    MetadataParser metadataParser;
+    ParsedMetadata parsedMetadata;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
