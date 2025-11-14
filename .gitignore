@@ -14,6 +14,9 @@ _deps
 Builds/*
 !Builds/.gitkeep
 
+# CMake build directory
+build/
+
 # This should never exist
 Install/*
 
