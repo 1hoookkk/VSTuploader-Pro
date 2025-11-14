@@ -179,6 +179,33 @@ void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 }
 
 //==============================================================================
+// VSTuploader Pro specific methods
+double PluginProcessor::getCurrentBPM() const
+{
+    if (auto* playHead = getPlayHead())
+    {
+        if (auto position = playHead->getPosition())
+        {
+            if (position->getBpm().hasValue())
+                return *position->getBpm();
+        }
+    }
+    return 120.0; // Default BPM if host doesn't provide one
+}
+
+bool PluginProcessor::isPlaying() const
+{
+    if (auto* playHead = getPlayHead())
+    {
+        if (auto position = playHead->getPosition())
+        {
+            return position->getIsPlaying();
+        }
+    }
+    return false;
+}
+
+//==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {

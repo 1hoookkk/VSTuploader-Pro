@@ -1,55 +1,158 @@
-![PAMPLEJUCE](assets/images/pamplejuce.png)
-[![](https://github.com/sudara/pamplejuce/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/sudara/pamplejuce/actions)
+# VSTuploader Pro
 
-Pamplejuce is a ~~template~~ lifestyle for creating and building JUCE plugins in 2025.
+**Upload beats directly to YouTube from within your DAW**
 
-Out-of-the-box, it:
+VSTuploader Pro is a VST3/AU plugin that streamlines the beat upload process for music producers. Drop your beat into the plugin, let it auto-parse metadata, and upload directly to YouTube - all without leaving your DAW.
 
-1. Runs C++23
-2. Uses JUCE 8.x as a git submodule (tracking develop).
-3. Uses CPM for dependency management.
-3. Relies on CMake 3.25 and higher for cross-platform building.
-4. Has [Catch2](https://github.com/catchorg/Catch2) v3.7.1 for the test framework and runner.
-5. Includes a `Tests` target and a `Benchmarks` target with examples to get started quickly.
-6. Has [Melatonin Inspector](https://github.com/sudara/melatonin_inspector) installed as a JUCE module to help relieve headaches when building plugin UI.
+## Target Users
+Beat producers who waste 30+ minutes per upload dealing with manual YouTube processes. With VSTuploader Pro, go from beat completion to YouTube upload in under 2 minutes.
 
-It also has integration with GitHub Actions, specifically:
+## Current Status: Week 1 MVP
 
-1. Building and testing cross-platform (linux, macOS, Windows) binaries
-2. Running tests and benchmarks in CI
-3. Running [pluginval](http://github.com/tracktion/pluginval) 1.x against the binaries for plugin validation
-4. Config for [installing Intel IPP](https://www.intel.com/content/www/us/en/developer/tools/oneapi/ipp.html)
-5. [Code signing and notarization on macOS](https://melatonin.dev/blog/how-to-code-sign-and-notarize-macos-audio-plugins-in-ci/)
-6. [Windows code signing via Azure Trusted Signing](https://melatonin.dev/blog/code-signing-on-windows-with-azure-trusted-signing/)
+### ✅ Completed Features (v0.1.0)
+- ✅ Basic JUCE VST3/AU plugin shell
+- ✅ Drag-drop audio file support (WAV, MP3, FLAC, AIFF)
+- ✅ BPM reading from DAW host
+- ✅ Modern, clean UI with visual feedback
+- ✅ File validation and display
 
-It also contains:
+### 🚧 Coming Soon (Week 1)
+- "Paste & Parse" - Auto-extract BPM, tags, and socials from YouTube descriptions
+- YouTube OAuth authentication
+- MP4 encoding (audio + static image)
+- Basic YouTube upload functionality
 
-1. A `.gitignore` for all platforms.
-2. A `.clang-format` file for keeping code tidy.
-3. A `VERSION` file that will propagate through JUCE and your app.
-4. A ton of useful comments and options around the CMake config.
+### 🔮 Future Features
+- Advanced metadata parsing
+- Custom thumbnail support
+- Upload queue management
+- Analytics dashboard
+- Batch upload support
 
-## How does this all work at a high level?
+## Technical Stack
 
-Check out the [official Pamplejuce documentation](https://melatonin.dev/manuals/pamplejuce/how-does-this-all-work/).
+- **Framework**: JUCE 8.0.1.0
+- **Language**: C++20
+- **Build System**: CMake 3.25+
+- **Target Formats**: VST3, AU, Standalone
+- **Platform Support**: Windows, macOS, Linux
 
-[![Arc - 2024-10-01 51@2x](https://github.com/user-attachments/assets/01d19d2d-fbac-481f-8cec-e9325b2abe57)](https://melatonin.dev/manuals/pamplejuce/how-does-this-all-work/)
+## Project Structure
 
-## Setting up for YOUR project
+```
+/VSTuploaderPro
+  /source
+    ├── PluginProcessor.cpp/h   - Audio processor with BPM reading
+    ├── PluginEditor.cpp/h      - UI with drag-drop functionality
+  /Resources
+    └── README.md               - Resource documentation
+  /tests
+    └── PluginBasics.cpp        - Unit tests
+  /benchmarks
+    └── Benchmarks.cpp          - Performance benchmarks
+```
 
-This is a template repo!
+## Building
 
-That means you can click "[Use this template](https://github.com/sudara/pamplejuce/generate)" here or at the top of the page to get your own copy (not fork) of the repo. Then you can make it private or keep it public, up to you.
+### Prerequisites
+- CMake 3.25 or higher
+- C++20 compatible compiler
+- JUCE 8.0.1.0 (included as submodule)
+- Git
 
-Then check out the [documentation](https://melatonin.dev/manuals/pamplejuce/setting-your-project-up/) so you know what to tweak. 
+### Initial Setup
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/yourusername/VSTuploader-Pro.git
+cd VSTuploader-Pro
 
-> [!NOTE]
-> Tests will immediately run and fail (go red) until you [set up code signing](https://melatonin.dev/manuals/pamplejuce/getting-started/code-signing/).
+# If you forgot --recursive
+git submodule update --init --recursive
+```
 
-## Having Issues?
+### Build Commands
 
-Thanks to everyone who has contributed to the repository. 
+**Windows (Visual Studio):**
+```bash
+cmake -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+```
 
-This repository covers a _lot_ of ground. JUCE itself has a lot of surface area. It's a group effort to maintain the garden and keep things nice!
+**macOS:**
+```bash
+cmake -B build -G Xcode
+cmake --build build --config Release
+```
 
-If something isn't just working out of the box — *it's probably not just you* — others are running into the problem, too, I promise. Check out [the official docs](https://melatonin.dev/manuals/pamplejuce), then please do [open an issue](https://github.com/sudara/pamplejuce/issues/new)!
+**Linux:**
+```bash
+cmake -B build
+cmake --build build --config Release
+```
+
+### Running Tests
+```bash
+cd build
+ctest -C Release
+```
+
+## Usage
+
+1. **Load the Plugin**: Open VSTuploader Pro in your DAW
+2. **Drop Your Beat**: Drag and drop your audio file (WAV, MP3, FLAC, AIFF) into the plugin
+3. **Check BPM**: The plugin automatically reads the BPM from your DAW host
+4. **Ready to Upload**: (Coming soon) Click upload to send directly to YouTube
+
+## Development Roadmap
+
+### Week 1 (Current)
+- [x] Basic plugin shell with drag-drop
+- [x] BPM reading from host
+- [ ] Paste & Parse metadata extraction
+- [ ] YouTube OAuth integration
+- [ ] MP4 encoding pipeline
+- [ ] Basic YouTube upload
+
+### Week 2-4
+- [ ] Advanced metadata parsing
+- [ ] Thumbnail customization
+- [ ] Upload queue management
+- [ ] Progress tracking
+- [ ] Error handling and retry logic
+
+### Beyond MVP
+- [ ] Analytics dashboard
+- [ ] Batch upload support
+- [ ] Template system for metadata
+- [ ] Integration with beat marketplaces
+
+## Pricing Model
+
+- **$4.99/month** subscription
+- **First 1000 users**: Free access for life
+- Additional features for premium tiers coming soon
+
+## Built With
+
+This project is built on [Pamplejuce](https://github.com/sudara/pamplejuce), a modern JUCE template with:
+- CPM for dependency management
+- Catch2 for testing
+- GitHub Actions CI/CD
+- Melatonin Inspector for UI debugging
+- Cross-platform build support
+
+## Contributing
+
+This project is currently in active development. Contributions, issues, and feature requests are welcome!
+
+## License
+
+[Your License Here]
+
+## Author
+
+Built by an experienced audio plugin developer with a focus on solving real problems for beat producers.
+
+---
+
+**VSTuploader Pro** - Stop wasting time. Start uploading beats.
