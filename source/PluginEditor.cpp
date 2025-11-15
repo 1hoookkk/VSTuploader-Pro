@@ -120,30 +120,30 @@ void DragDropZone::setDroppedFileName (const juce::String& name)
 PluginEditor::PluginEditor (PluginProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
-    // Setup title label
+    // Setup title label (compact)
     titleLabel.setText ("VSTuploader Pro", juce::dontSendNotification);
-    titleLabel.setFont (juce::Font (28.0f, juce::Font::bold));
+    titleLabel.setFont (juce::Font (13.0f, juce::Font::bold));
     titleLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    titleLabel.setJustificationType (juce::Justification::centred);
+    titleLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (titleLabel);
 
-    // Setup BPM label
+    // Setup BPM label (compact, inline)
     bpmLabel.setText ("BPM: --", juce::dontSendNotification);
-    bpmLabel.setFont (juce::Font (20.0f, juce::Font::bold));
+    bpmLabel.setFont (juce::Font (11.0f, juce::Font::bold));
     bpmLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
-    bpmLabel.setJustificationType (juce::Justification::centred);
+    bpmLabel.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (bpmLabel);
 
-    // Setup file name label
+    // Setup file name label (compact)
     fileNameLabel.setText ("", juce::dontSendNotification);
-    fileNameLabel.setFont (juce::Font (14.0f));
+    fileNameLabel.setFont (juce::Font (9.0f));
     fileNameLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     fileNameLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (fileNameLabel);
 
-    // Setup status label
-    statusLabel.setText ("Ready to upload beats to YouTube", juce::dontSendNotification);
-    statusLabel.setFont (juce::Font (12.0f));
+    // Setup status label (compact)
+    statusLabel.setText ("Ready", juce::dontSendNotification);
+    statusLabel.setFont (juce::Font (9.0f));
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
     statusLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (statusLabel);
@@ -166,7 +166,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     pasteTextEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff2a2a2a));
     pasteTextEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
     pasteTextEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::grey);
-    pasteTextEditor.setFont (juce::Font (12.0f));
+    pasteTextEditor.setFont (juce::Font (9.0f));
     addAndMakeVisible (pasteTextEditor);
 
     parseButton.onClick = [this]() { handlePasteAndParse(); };
@@ -179,27 +179,27 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     parsedSectionLabel.setColour (juce::Label::textColourId, juce::Colours::lightblue);
     addAndMakeVisible (parsedSectionLabel);
 
-    keyLabel.setFont (juce::Font (11.0f));
+    keyLabel.setFont (juce::Font (9.0f));
     keyLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (keyLabel);
 
-    instagramLabel.setFont (juce::Font (11.0f));
+    instagramLabel.setFont (juce::Font (9.0f));
     instagramLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (instagramLabel);
 
-    twitterLabel.setFont (juce::Font (11.0f));
+    twitterLabel.setFont (juce::Font (9.0f));
     twitterLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (twitterLabel);
 
-    emailLabel.setFont (juce::Font (11.0f));
+    emailLabel.setFont (juce::Font (9.0f));
     emailLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (emailLabel);
 
-    usageLabel.setFont (juce::Font (11.0f));
+    usageLabel.setFont (juce::Font (9.0f));
     usageLabel.setColour (juce::Label::textColourId, juce::Colours::lightgreen);
     addAndMakeVisible (usageLabel);
 
-    tagsLabel.setFont (juce::Font (10.0f));
+    tagsLabel.setFont (juce::Font (8.0f));
     tagsLabel.setColour (juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible (tagsLabel);
 
@@ -213,7 +213,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     connectYouTubeButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xffff0000)); // YouTube red
     addAndMakeVisible (connectYouTubeButton);
 
-    youtubeStatusLabel.setFont (juce::Font (11.0f));
+    youtubeStatusLabel.setFont (juce::Font (9.0f));
     youtubeStatusLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
     addAndMakeVisible (youtubeStatusLabel);
 
@@ -267,7 +267,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     // Initialize metadata display
     updateMetadataDisplay();
 
-    setSize (700, 1000);
+    setSize (380, 650);
 }
 
 PluginEditor::~PluginEditor()
@@ -293,69 +293,66 @@ void PluginEditor::paint (juce::Graphics& g)
 void PluginEditor::resized()
 {
     auto area = getLocalBounds();
+    int padding = 8;
 
-    // Title at top
-    titleLabel.setBounds (area.removeFromTop(50).reduced(20, 10));
+    // Compact header: Channel + BPM inline
+    auto headerArea = area.removeFromTop(30).reduced(padding, 4);
+    titleLabel.setBounds (headerArea.removeFromLeft(180));
+    bpmLabel.setBounds (headerArea);
 
-    // BPM display
-    bpmLabel.setBounds (area.removeFromTop(35).reduced(20, 5));
+    area.removeFromTop(2); // Tight spacing
 
-    area.removeFromTop(5); // Spacing
+    // Compact drag-drop zone
+    auto dropZoneHeight = 70;
+    dragDropZone.setBounds (area.removeFromTop(dropZoneHeight).reduced(padding, 4));
 
-    // Drag-drop zone (smaller now)
-    auto dropZoneHeight = 120;
-    dragDropZone.setBounds (area.removeFromTop(dropZoneHeight).reduced(30, 10));
+    // File name (compact)
+    fileNameLabel.setBounds (area.removeFromTop(20).reduced(padding, 2));
 
-    // File name label
-    fileNameLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+    area.removeFromTop(4); // Tight spacing
 
-    area.removeFromTop(10); // Spacing
+    // Paste & Parse button (compact, no label)
+    parseButton.setBounds (area.removeFromTop(28).reduced(padding, 2));
 
-    // Paste & Parse section
-    pasteLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+    // Description editor (hidden by default, will add toggle later)
+    // For now, keep it small
+    auto descHeight = 80;
+    pasteTextEditor.setBounds (area.removeFromTop(descHeight).reduced(padding, 2));
 
-    auto pasteArea = area.removeFromTop(150);
-    pasteTextEditor.setBounds (pasteArea.reduced(20, 5).removeFromLeft(pasteArea.getWidth() - 140));
-    parseButton.setBounds (pasteArea.reduced(20, 5).removeFromRight(110).withHeight(35).withY(pasteArea.getY() + 60));
+    area.removeFromTop(4);
 
-    area.removeFromTop(10); // Spacing
+    // Metadata chips (compact, single line each)
+    auto metadataArea = area.removeFromTop(120).reduced(padding, 2);
+    int chipHeight = 18;
 
-    // Parsed metadata section
-    parsedSectionLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+    keyLabel.setBounds (metadataArea.removeFromTop(chipHeight));
+    instagramLabel.setBounds (metadataArea.removeFromTop(chipHeight));
+    twitterLabel.setBounds (metadataArea.removeFromTop(chipHeight));
+    emailLabel.setBounds (metadataArea.removeFromTop(chipHeight));
+    usageLabel.setBounds (metadataArea.removeFromTop(chipHeight));
+    metadataArea.removeFromTop(2);
+    tagsLabel.setBounds (metadataArea.removeFromTop(chipHeight * 2));
 
-    auto metadataArea = area.removeFromTop(200).reduced(20, 5);
-    int lineHeight = 22;
+    area.removeFromTop(4);
 
-    keyLabel.setBounds (metadataArea.removeFromTop(lineHeight));
-    instagramLabel.setBounds (metadataArea.removeFromTop(lineHeight));
-    twitterLabel.setBounds (metadataArea.removeFromTop(lineHeight));
-    emailLabel.setBounds (metadataArea.removeFromTop(lineHeight * 2));  // More space for multiple emails
-    usageLabel.setBounds (metadataArea.removeFromTop(lineHeight));
+    // YouTube section (compact)
+    auto ytArea = area.removeFromTop(70).reduced(padding, 2);
 
-    metadataArea.removeFromTop(5);
-    tagsLabel.setBounds (metadataArea.removeFromTop(80));
+    connectYouTubeButton.setBounds (ytArea.removeFromTop(28));
+    youtubeStatusLabel.setBounds (ytArea.removeFromTop(16));
+    ytArea.removeFromTop(2);
+    uploadButton.setBounds (ytArea.removeFromTop(28));
 
-    area.removeFromTop(10); // Spacing
+    area.removeFromTop(4);
 
-    // YouTube section
-    youtubeLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
+    // Status at bottom
+    statusLabel.setBounds (area.removeFromTop(20).reduced(padding, 2));
 
-    auto youtubeArea = area.removeFromTop(80).reduced(20, 5);
-    auto leftYT = youtubeArea.removeFromLeft(youtubeArea.getWidth() / 2);
-    auto rightYT = youtubeArea;
-
-    connectYouTubeButton.setBounds (leftYT.removeFromTop(35).reduced(5));
-    youtubeStatusLabel.setBounds (leftYT.removeFromTop(40).reduced(5));
-
-    uploadButton.setBounds (rightYT.removeFromTop(35).reduced(5));
-
-    area.removeFromTop(10); // Spacing
-
-    // Status label
-    statusLabel.setBounds (area.removeFromTop(25).reduced(20, 5));
-
-    // Inspector button at bottom (for debugging)
-    inspectButton.setBounds (area.removeFromBottom(30).withSizeKeepingCentre(120, 25));
+    // Hide labels initially
+    pasteLabel.setVisible(false);
+    parsedSectionLabel.setVisible(false);
+    youtubeLabel.setVisible(false);
+    inspectButton.setVisible(false); // Hide in minimal mode
 }
 
 void PluginEditor::timerCallback()
