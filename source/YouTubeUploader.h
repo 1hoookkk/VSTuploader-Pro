@@ -77,6 +77,30 @@ public:
     std::function<void(juce::String error)> onError;
 
 private:
+    // OAuth callback server
+    class OAuthCallbackServer : public juce::Thread
+    {
+    public:
+        OAuthCallbackServer(YouTubeUploader& uploader);
+        ~OAuthCallbackServer() override;
+
+        void run() override;
+        void stop();
+
+        bool isRunning() const { return serverRunning; }
+
+    private:
+        YouTubeUploader& uploaderRef;
+        std::unique_ptr<juce::StreamingSocket> serverSocket;
+        bool serverRunning = false;
+
+        void handleConnection(juce::StreamingSocket& clientSocket);
+        juce::String extractCodeFromRequest(const juce::String& request);
+        void sendResponse(juce::StreamingSocket& socket, const juce::String& html, int statusCode = 200);
+    };
+
+    std::unique_ptr<OAuthCallbackServer> callbackServer;
+
     // OAuth configuration
     juce::String clientId;
     juce::String clientSecret;

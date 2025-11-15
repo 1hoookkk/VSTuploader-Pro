@@ -13,6 +13,11 @@ YouTubeUploader::YouTubeUploader()
 
 YouTubeUploader::~YouTubeUploader()
 {
+    if (callbackServer)
+    {
+        callbackServer->stop();
+        callbackServer.reset();
+    }
 }
 
 //==============================================================================
@@ -20,19 +25,24 @@ YouTubeUploader::~YouTubeUploader()
 //==============================================================================
 void YouTubeUploader::startAuth()
 {
+    // Start the callback server first
+    if (!callbackServer)
+    {
+        callbackServer = std::make_unique<OAuthCallbackServer>(*this);
+        callbackServer->startThread();
+    }
+
+    // Wait a moment for server to start
+    juce::Thread::sleep(100);
+
     // Build the OAuth consent URL
     auto authUrl = buildAuthUrl();
 
     // Open system browser to the consent URL
     juce::URL(authUrl).launchInDefaultBrowser();
 
-    // TODO: Start local HTTP server on port 5173 to receive callback
-    // For now, we'll implement a simplified version
-    // In production, you'd need a proper HTTP server implementation
-
     if (onError)
-        onError("OAuth flow started. Please complete authorization in your browser.\n"
-               "NOTE: Full OAuth implementation requires a local callback server.");
+        onError("OAuth flow started. Please complete authorization in your browser.");
 }
 
 juce::String YouTubeUploader::buildAuthUrl() const
@@ -117,6 +127,183 @@ bool YouTubeUploader::exchangeCodeForToken(const juce::String& code)
     return true;
 }
 
+//==============================================================================
+// OAuth Callback Server
+//==============================================================================
+YouTubeUploader::OAuthCallbackServer::OAuthCallbackServer(YouTubeUploader& uploader)
+    : juce::Thread("OAuth Callback Server"),
+      uploaderRef(uploader)
+{
+}
+
+YouTubeUploader::OAuthCallbackServer::~OAuthCallbackServer()
+{
+    stop();
+}
+
+void YouTubeUploader::OAuthCallbackServer::run()
+{
+    // Create server socket
+    serverSocket = std::make_unique<juce::StreamingSocket>();
+
+    if (!serverSocket->createListener(callbackPort, "127.0.0.1"))
+    {
+        if (uploaderRef.onError)
+            uploaderRef.onError("Failed to start OAuth callback server on port " + juce::String(callbackPort));
+        return;
+    }
+
+    serverRunning = true;
+
+    // Accept connections (timeout after 5 minutes)
+    auto startTime = juce::Time::getMillisecondCounter();
+    auto timeout = 5 * 60 * 1000; // 5 minutes
+
+    while (!threadShouldExit() && serverRunning)
+    {
+        // Check timeout
+        if (juce::Time::getMillisecondCounter() - startTime > timeout)
+        {
+            if (uploaderRef.onError)
+                uploaderRef.onError("OAuth timeout - no response received within 5 minutes");
+            break;
+        }
+
+        // Wait for connection (with short timeout to check threadShouldExit)
+        auto clientSocket = serverSocket->waitForNextConnection();
+
+        if (clientSocket != nullptr)
+        {
+            handleConnection(*clientSocket);
+            delete clientSocket;
+
+            // Stop server after handling one successful connection
+            break;
+        }
+
+        // Small delay to avoid busy waiting
+        juce::Thread::sleep(100);
+    }
+
+    serverRunning = false;
+    serverSocket.reset();
+}
+
+void YouTubeUploader::OAuthCallbackServer::handleConnection(juce::StreamingSocket& clientSocket)
+{
+    // Read HTTP request
+    juce::MemoryBlock buffer(1024);
+    auto bytesRead = clientSocket.read(buffer.getData(), (int)buffer.getSize(), false);
+
+    if (bytesRead <= 0)
+    {
+        sendResponse(clientSocket, "<html><body><h1>Error</h1><p>Invalid request</p></body></html>", 400);
+        return;
+    }
+
+    juce::String request(static_cast<const char*>(buffer.getData()), (size_t)bytesRead);
+
+    // Extract authorization code
+    auto code = extractCodeFromRequest(request);
+
+    if (code.isEmpty())
+    {
+        sendResponse(clientSocket,
+            "<html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>"
+            "<h1>❌ Authorization Failed</h1>"
+            "<p>No authorization code received.</p>"
+            "<p>You can close this window.</p>"
+            "</body></html>", 400);
+
+        if (uploaderRef.onError)
+            uploaderRef.onError("OAuth failed: No authorization code received");
+        return;
+    }
+
+    // Exchange code for token (this is synchronous)
+    bool success = uploaderRef.exchangeCodeForToken(code);
+
+    if (success)
+    {
+        sendResponse(clientSocket,
+            "<html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>"
+            "<h1>✅ Success!</h1>"
+            "<p>VSTuploader Pro is now connected to YouTube.</p>"
+            "<p>You can close this window and return to your DAW.</p>"
+            "</body></html>");
+    }
+    else
+    {
+        sendResponse(clientSocket,
+            "<html><body style='font-family: sans-serif; text-align: center; padding: 50px;'>"
+            "<h1>❌ Authorization Failed</h1>"
+            "<p>Failed to exchange authorization code for access token.</p>"
+            "<p>Please try again in the plugin.</p>"
+            "</body></html>", 400);
+    }
+}
+
+juce::String YouTubeUploader::OAuthCallbackServer::extractCodeFromRequest(const juce::String& request)
+{
+    // Parse HTTP GET request
+    // Format: "GET /callback?code=XXXXX&scope=... HTTP/1.1"
+
+    auto lines = juce::StringArray::fromLines(request);
+    if (lines.size() == 0)
+        return {};
+
+    auto firstLine = lines[0];
+
+    // Find the query string
+    auto queryStart = firstLine.indexOf("?");
+    auto queryEnd = firstLine.indexOf(" HTTP");
+
+    if (queryStart < 0 || queryEnd < 0 || queryEnd <= queryStart)
+        return {};
+
+    auto queryString = firstLine.substring(queryStart + 1, queryEnd);
+
+    // Parse query parameters
+    auto params = juce::StringArray::fromTokens(queryString, "&", "");
+
+    for (const auto& param : params)
+    {
+        if (param.startsWith("code="))
+        {
+            return juce::URL::removeEscapeChars(param.substring(5));
+        }
+    }
+
+    return {};
+}
+
+void YouTubeUploader::OAuthCallbackServer::sendResponse(juce::StreamingSocket& socket,
+                                                        const juce::String& html,
+                                                        int statusCode)
+{
+    juce::String statusText = (statusCode == 200) ? "OK" : "Bad Request";
+
+    juce::String response =
+        "HTTP/1.1 " + juce::String(statusCode) + " " + statusText + "\r\n"
+        "Content-Type: text/html; charset=UTF-8\r\n"
+        "Content-Length: " + juce::String(html.length()) + "\r\n"
+        "Connection: close\r\n"
+        "\r\n" +
+        html;
+
+    socket.write(response.toRawUTF8(), (int)response.getNumBytesAsUTF8());
+}
+
+void YouTubeUploader::OAuthCallbackServer::stop()
+{
+    serverRunning = false;
+    signalThreadShouldExit();
+    stopThread(2000);
+}
+
+//==============================================================================
+// Token Refresh
+//==============================================================================
 bool YouTubeUploader::refreshAccessToken()
 {
     if (authToken.refreshToken.isEmpty())
@@ -254,6 +441,13 @@ void YouTubeUploader::disconnect()
     authToken = YouTubeAuthToken();
     channelInfo = YouTubeChannelInfo();
     deleteStoredRefreshToken();
+
+    // Stop callback server if running
+    if (callbackServer)
+    {
+        callbackServer->stop();
+        callbackServer.reset();
+    }
 }
 
 //==============================================================================
