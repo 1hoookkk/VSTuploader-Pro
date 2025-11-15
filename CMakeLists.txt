@@ -51,6 +51,21 @@ project(${PROJECT_NAME} VERSION ${CURRENT_VERSION})
 # On Github Actions, this is done as a part of actions/checkout
 add_subdirectory(JUCE)
 
+# Find FFmpeg libraries for video encoding
+# Note: Set CMAKE_TOOLCHAIN_FILE to vcpkg toolchain when configuring:
+# cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+find_package(FFMPEG COMPONENTS avcodec avformat avutil swscale swresample)
+
+if(FFMPEG_FOUND)
+    message(STATUS "FFmpeg found: ${FFMPEG_VERSION}")
+    message(STATUS "FFmpeg include dirs: ${FFMPEG_INCLUDE_DIRS}")
+    message(STATUS "FFmpeg libraries: ${FFMPEG_LIBRARIES}")
+else()
+    message(WARNING "FFmpeg not found. Video encoding features will be disabled.")
+    message(WARNING "To enable FFmpeg, install it via vcpkg and configure with:")
+    message(WARNING "  cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
+endif()
+
 # Add CLAP format
 add_subdirectory(modules/clap-juce-extensions EXCLUDE_FROM_ALL)
 
@@ -144,12 +159,20 @@ target_link_libraries(SharedCode
     melatonin_inspector
     juce_audio_utils
     juce_audio_processors
+    juce_audio_formats
     juce_dsp
     juce_gui_basics
     juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+# Link FFmpeg if available
+if(FFMPEG_FOUND)
+    target_include_directories(SharedCode INTERFACE ${FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(SharedCode INTERFACE ${FFMPEG_LIBRARIES})
+    target_compile_definitions(SharedCode INTERFACE VSTUPLOADER_FFMPEG_ENABLED=1)
+endif()
 
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
